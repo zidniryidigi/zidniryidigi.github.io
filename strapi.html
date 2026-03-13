@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strapi + Astro — Multi-Site CMS Architecture</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Unbounded:wght@300;400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #09090f;
+  --surface: #0f0f1a;
+  --surface2: #161625;
+  --border: #1e1e30;
+  --border2: #2a2a42;
+
+  --strapi: #4945ff;
+  --strapi-light: #7b79ff;
+  --strapi-dim: rgba(73,69,255,0.15);
+
+  --astro: #ff5d01;
+  --astro-light: #ff8c4b;
+  --astro-dim: rgba(255,93,1,0.15);
+
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --teal: #14b8a6;
+  --teal-dim: rgba(20,184,166,0.12);
+  --red: #ef4444;
+
+  --text: #e4e4f0;
+  --muted: #5a5a7a;
+  --muted2: #8888aa;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grain */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ── COVER ── */
+.cover {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 64px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #09090f 0%, #0d0d1f 50%, #0f0a09 100%);
+}
+
+.cover-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cover-blob-1 {
+  position: absolute;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(73,69,255,0.12) 0%, transparent 70%);
+  top: -100px; left: -100px;
+}
+
+.cover-blob-2 {
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,93,1,0.1) 0%, transparent 70%);
+  bottom: -50px; right: 10%;
+}
+
+.cover-lines {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+.cover-content { position: relative; z-index: 1; }
+
+.cover-eyebrow {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  margin-bottom: 40px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cover-eyebrow::before {
+  content: '';
+  display: block;
+  width: 32px; height: 1px;
+  background: var(--muted);
+}
+
+.cover-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: clamp(2.5rem, 6vw, 5.5rem);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: 32px;
+}
+
+.cover-title .t-strapi { color: var(--strapi-light); }
+.cover-title .t-plus { color: var(--muted); font-weight: 300; }
+.cover-title .t-astro { color: var(--astro); }
+.cover-title .t-sub { display: block; font-size: 0.4em; font-weight: 300; color: var(--muted2); margin-top: 12px; letter-spacing: 0; }
+
+.cover-desc {
+  max-width: 520px;
+  color: var(--muted2);
+  font-size: 1rem;
+  line-height: 1.7;
+  font-weight: 300;
+  margin-bottom: 48px;
+}
+
+.cover-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 40px; }
+.tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+}
+.tag.strapi { border-color: rgba(73,69,255,0.4); color: var(--strapi-light); background: var(--strapi-dim); }
+.tag.astro { border-color: rgba(255,93,1,0.4); color: var(--astro-light); background: var(--astro-dim); }
+.tag.green { border-color: rgba(34,197,94,0.3); color: var(--green); background: var(--green-dim); }
+
+/* ── NAV ── */
+.nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(9,9,15,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.nav-item {
+  padding: 16px 20px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.2s;
+  background: none;
+  border-top: none; border-left: none; border-right: none;
+  letter-spacing: 0.05em;
+}
+
+.nav-item:hover { color: var(--text); }
+.nav-item.active { color: var(--strapi-light); border-bottom-color: var(--strapi-light); }
+
+/* ── SECTIONS ── */
+.section { display: none; padding: 64px 48px; max-width: 1280px; margin: 0 auto; }
+.section.active { display: block; }
+
+.sec-header {
+  margin-bottom: 52px;
+}
+
+.sec-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+.sec-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.sec-title .accent-strapi { color: var(--strapi-light); }
+.sec-title .accent-astro { color: var(--astro); }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 24px;
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: var(--border2); }
+
+.card-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── ARCHITECTURE VISUAL ── */
+.arch-visual {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px;
+  margin-bottom: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.arch-visual::before {
+  content: 'ARCHITECTURE OVERVIEW';
+  position: absolute;
+  top: 20px; right: 24px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* 3-column arch layout */
+.arch-cols {
+  display: grid;
+  grid-template-columns: 1fr 80px 1fr 80px 1fr;
+  align-items: start;
+  gap: 0;
+}
+
+.arch-col-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.arch-box {
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.arch-box:hover { transform: translateX(2px); }
+
+.arch-box .ab-icon { font-size: 1.2rem; margin-bottom: 6px; }
+.arch-box .ab-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 3px; }
+.arch-box .ab-sub { font-size: 0.72rem; color: var(--muted2); font-family: 'Space Mono', monospace; }
+
+.arch-box.strapi { background: var(--strapi-dim); border-color: rgba(73,69,255,0.25); }
+.arch-box.astro  { background: var(--astro-dim);   border-color: rgba(255,93,1,0.25); }
+.arch-box.green  { background: var(--green-dim);   border-color: rgba(34,197,94,0.2); }
+.arch-box.amber  { background: var(--amber-dim);   border-color: rgba(245,158,11,0.2); }
+.arch-box.teal   { background: var(--teal-dim);    border-color: rgba(20,184,166,0.2); }
+.arch-box.dim    { background: var(--surface2);    border-color: var(--border2); }
+
+.arch-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 48px;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.arch-arrow-shaft {
+  width: 1px;
+  flex: 0;
+  height: 0;
+}
+
+.arch-arrow-horiz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.arch-arrow-line-h {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border2), var(--strapi-light), var(--border2));
+  position: relative;
+}
+.arch-arrow-line-h::after {
+  content: '▶';
+  position: absolute;
+  right: -4px; top: -7px;
+  font-size: 10px;
+  color: var(--strapi-light);
+}
+
+.arch-arrow-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.58rem;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ── FLOW DIAGRAM ── */
+.flow-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.flow-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.25em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+.flow-track {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 900px;
+  margin-bottom: 28px;
+}
+
+.fnode {
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-width: 130px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.fnode .fn-icon { font-size: 1.4rem; margin-bottom: 6px; }
+.fnode .fn-title { font-weight: 700; font-size: 0.82rem; margin-bottom: 2px; }
+.fnode .fn-sub { font-size: 0.68rem; color: var(--muted2); font-family: 'Space Mono', monospace; }
+
+.fnode.strapi { background: var(--strapi-dim); border: 1px solid rgba(73,69,255,0.3); }
+.fnode.astro  { background: var(--astro-dim);  border: 1px solid rgba(255,93,1,0.3); }
+.fnode.green  { background: var(--green-dim);  border: 1px solid rgba(34,197,94,0.25); }
+.fnode.amber  { background: var(--amber-dim);  border: 1px solid rgba(245,158,11,0.25); }
+.fnode.dark   { background: var(--surface2);   border: 1px solid var(--border2); }
+
+.fedge {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.fedge-line {
+  width: 100%;
+  height: 1px;
+  position: relative;
+}
+.fedge-line.solid { background: var(--border2); }
+.fedge-line.strapi-g { background: linear-gradient(90deg, rgba(73,69,255,0.6), rgba(73,69,255,0.2)); }
+.fedge-line.astro-g  { background: linear-gradient(90deg, rgba(255,93,1,0.6), rgba(255,93,1,0.2)); }
+.fedge-line.green-g  { background: linear-gradient(90deg, rgba(34,197,94,0.5), rgba(34,197,94,0.2)); }
+
+.fedge-line::after {
+  content: '▶';
+  position: absolute;
+  right: -3px; top: -7px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.fedge-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.58rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── STRAPI CONTENT TYPES ── */
+.ct-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.ct-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.ct-card:hover {
+  border-color: var(--strapi-light);
+  box-shadow: 0 0 24px rgba(73,69,255,0.08);
+}
+
+.ct-head {
+  padding: 14px 18px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.ct-head.strapi { background: var(--strapi-dim); color: var(--strapi-light); }
+.ct-head.astro  { background: var(--astro-dim);  color: var(--astro-light); }
+.ct-head.green  { background: var(--green-dim);  color: var(--green); }
+.ct-head.amber  { background: var(--amber-dim);  color: var(--amber); }
+.ct-head.teal   { background: var(--teal-dim);   color: var(--teal); }
+
+.ct-row {
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.1s;
+}
+.ct-row:hover { background: var(--surface2); }
+
+.ct-field { color: var(--text); }
+.ct-type  { color: var(--muted2); font-size: 0.68rem; }
+
+.badge {
+  font-size: 0.6rem;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.badge.strapi { background: var(--strapi-dim); color: var(--strapi-light); border: 1px solid rgba(73,69,255,0.3); }
+.badge.fk     { background: var(--astro-dim);  color: var(--astro-light);  border: 1px solid rgba(255,93,1,0.3); }
+.badge.req    { background: var(--green-dim);  color: var(--green);        border: 1px solid rgba(34,197,94,0.25); }
+
+/* ── TIMELINE ── */
+.timeline {
+  position: relative;
+  padding-left: 44px;
+  margin-bottom: 28px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 20px;
+  bottom: 20px;
+  width: 1px;
+  background: linear-gradient(180deg, var(--strapi-light), var(--astro), var(--green), var(--amber));
+}
+
+.tl-item {
+  position: relative;
+  margin-bottom: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  transition: border-color 0.2s;
+}
+.tl-item:hover { border-color: var(--border2); }
+
+.tl-dot {
+  position: absolute;
+  left: -36px; top: 20px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.62rem; font-weight: 700;
+  font-family: 'Space Mono', monospace;
+  color: white;
+  border: 2px solid var(--bg);
+}
+
+.tl-item:nth-child(1) .tl-dot { background: var(--strapi); }
+.tl-item:nth-child(2) .tl-dot { background: var(--strapi-light); }
+.tl-item:nth-child(3) .tl-dot { background: var(--astro); }
+.tl-item:nth-child(4) .tl-dot { background: var(--green); }
+.tl-item:nth-child(5) .tl-dot { background: var(--amber); }
+.tl-item:nth-child(6) .tl-dot { background: var(--teal); }
+
+.tl-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.tl-title { font-weight: 700; font-size: 0.95rem; }
+
+.tl-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  padding: 2px 10px;
+  border-radius: 100px;
+  background: var(--surface2);
+  color: var(--muted2);
+}
+
+.tl-desc { color: var(--muted2); font-size: 0.84rem; line-height: 1.65; margin-bottom: 12px; }
+
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+}
+.pill.strapi { border-color: rgba(73,69,255,0.35); color: var(--strapi-light); background: var(--strapi-dim); }
+.pill.astro  { border-color: rgba(255,93,1,0.35);  color: var(--astro-light);  background: var(--astro-dim); }
+.pill.green  { border-color: rgba(34,197,94,0.3);  color: var(--green);        background: var(--green-dim); }
+.pill.amber  { border-color: rgba(245,158,11,0.3); color: var(--amber);        background: var(--amber-dim); }
+
+/* ── CHARTS ── */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  transition: border-color 0.2s;
+}
+.chart-card:hover { border-color: var(--border2); }
+
+.chart-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.chart-card canvas { max-height: 250px; }
+
+/* ── CODE ── */
+.code-block {
+  background: #06060e;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.76rem;
+  line-height: 1.85;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.ck  { color: #7b79ff; }   /* keyword */
+.cs  { color: #86efac; }   /* string */
+.cf  { color: #fb923c; }   /* function */
+.cc  { color: #3f3f5a; }   /* comment */
+.cv  { color: #e4e4f0; }   /* var */
+.cn  { color: #f59e0b; }   /* number/constant */
+.cp  { color: #14b8a6; }   /* property */
+
+/* ── COMPARISON TABLE ── */
+.cmp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  background: var(--surface);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.cmp-table th {
+  padding: 14px 18px;
+  text-align: left;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+
+.cmp-table th:first-child { background: var(--surface2); color: var(--muted2); }
+.cmp-table th.strapi-h { background: var(--strapi-dim); color: var(--strapi-light); }
+.cmp-table th.astro-h  { background: var(--astro-dim);  color: var(--astro-light); }
+.cmp-table th.neutral  { background: var(--surface2);   color: var(--muted2); }
+
+.cmp-table td {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted2);
+}
+.cmp-table tr:hover td { background: var(--surface2); }
+.cmp-table td:first-child { color: var(--text); font-weight: 500; }
+
+/* ── STATS ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border2); }
+
+.stat-val {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.stat-val.strapi { color: var(--strapi-light); }
+.stat-val.astro  { color: var(--astro); }
+.stat-val.green  { color: var(--green); }
+.stat-val.amber  { color: var(--amber); }
+.stat-val.teal   { color: var(--teal); }
+
+.stat-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── FOLDER TREE ── */
+.tree {
+  background: #06060e;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.76rem;
+  line-height: 2;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.t-dir  { color: var(--amber); }
+.t-file { color: var(--muted2); }
+.t-cm   { color: #3f3f5a; }
+.t-s    { color: var(--strapi-light); }
+.t-a    { color: var(--astro-light); }
+.t-g    { color: var(--green); }
+.t-env  { color: var(--teal); }
+
+/* ── DEPLOY DIAGRAM ── */
+.deploy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.deploy-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+  transition: all 0.2s;
+}
+.deploy-card:hover { border-color: var(--strapi-light); transform: translateY(-2px); }
+
+.deploy-icon { font-size: 2rem; margin-bottom: 10px; }
+.deploy-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+.deploy-sub  { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--muted2); margin-bottom: 14px; }
+.deploy-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.deploy-tag  {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--muted2);
+  border: 1px solid var(--border2);
+}
+
+/* ── WEBHOOK FLOW ── */
+.webhook-flow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.wh-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wh-box {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72rem;
+  text-align: center;
+  min-width: 120px;
+}
+.wh-box .wb-icon { font-size: 1.3rem; margin-bottom: 4px; }
+.wh-box .wb-name { color: var(--text); font-weight: 700; }
+.wh-box .wb-sub  { color: var(--muted2); font-size: 0.62rem; margin-top: 2px; }
+
+.wh-box.strapi { border-color: rgba(73,69,255,0.3); background: var(--strapi-dim); }
+.wh-box.astro  { border-color: rgba(255,93,1,0.3);  background: var(--astro-dim); }
+.wh-box.green  { border-color: rgba(34,197,94,0.25); background: var(--green-dim); }
+
+.wh-arrow { color: var(--muted); font-size: 1.1rem; flex-shrink: 0; }
+.wh-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.wh-time {
+  background: var(--green-dim);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: var(--green);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.68rem;
+}
+
+/* animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.section.active > * { animation: fadeUp 0.35s ease both; }
+.section.active > *:nth-child(2) { animation-delay: 0.05s; }
+.section.active > *:nth-child(3) { animation-delay: 0.1s; }
+.section.active > *:nth-child(4) { animation-delay: 0.15s; }
+
+@media (max-width: 768px) {
+  .cover { padding: 32px 24px; }
+  .section { padding: 32px 20px; }
+  .arch-cols { grid-template-columns: 1fr; }
+  .arch-arrow { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ COVER ══ -->
+<div class="cover">
+  <div class="cover-bg">
+    <div class="cover-blob-1"></div>
+    <div class="cover-blob-2"></div>
+    <div class="cover-lines"></div>
+  </div>
+  <div class="cover-content">
+    <div class="cover-eyebrow">Technical Architecture Document — v2.0 — Strapi + Astro</div>
+    <h1 class="cover-title">
+      <span class="t-strapi">Strapi</span>
+      <span class="t-plus"> +</span>
+      <span class="t-astro"> Astro</span>
+      <span class="t-sub">Multi-Site CMS Architecture</span>
+    </h1>
+    <p class="cover-desc">
+      One Strapi instance as the headless CMS backend. Infinite Astro sites as the frontend layer. 
+      Admin publishes content → webhook triggers → Astro sites rebuild or update in near real-time.
+    </p>
+    <div class="cover-tags">
+      <span class="tag strapi">Strapi v5</span>
+      <span class="tag astro">Astro 4</span>
+      <span class="tag green">Self-hosted</span>
+      <span class="tag">Railway / Render</span>
+      <span class="tag">PostgreSQL</span>
+      <span class="tag">REST API + Webhooks</span>
+      <span class="tag">Multi-tenant</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NAV ══ -->
+<nav class="nav-bar">
+  <button class="nav-item active" onclick="show('overview')">01_OVERVIEW</button>
+  <button class="nav-item" onclick="show('content-types')">02_CONTENT_TYPES</button>
+  <button class="nav-item" onclick="show('flow')">03_UPDATE_FLOW</button>
+  <button class="nav-item" onclick="show('code')">04_CODE</button>
+  <button class="nav-item" onclick="show('charts')">05_CHARTS</button>
+  <button class="nav-item" onclick="show('deploy')">06_DEPLOY</button>
+</nav>
+
+<!-- ══════════ 01 OVERVIEW ══════════ -->
+<div id="sec-overview" class="section active">
+  <div class="sec-header">
+    <div class="sec-label">// 01 — system overview</div>
+    <h2 class="sec-title">How <span class="accent-strapi">Strapi</span> + <span class="accent-astro">Astro</span> Work Together</h2>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-val strapi">1</div><div class="stat-label">Strapi Instance</div></div>
+    <div class="stat-card"><div class="stat-val astro">∞</div><div class="stat-label">Astro Sites</div></div>
+    <div class="stat-card"><div class="stat-val green">&lt;30s</div><div class="stat-label">Update Time</div></div>
+    <div class="stat-card"><div class="stat-val amber">6</div><div class="stat-label">Content Types</div></div>
+    <div class="stat-card"><div class="stat-val teal">0</div><div class="stat-label">Extra Backend</div></div>
+    <div class="stat-card"><div class="stat-val strapi">REST</div><div class="stat-label">API Protocol</div></div>
+  </div>
+
+  <!-- Architecture Visual -->
+  <div class="arch-visual">
+    <div class="arch-cols">
+
+      <!-- Col 1: Admin -->
+      <div>
+        <div class="arch-col-title">Admin Layer</div>
+        <div class="arch-box strapi">
+          <div class="ab-icon">🛠</div>
+          <div class="ab-name">Strapi Admin Panel</div>
+          <div class="ab-sub">Built-in dashboard</div>
+        </div>
+        <div class="arch-box strapi">
+          <div class="ab-icon">👤</div>
+          <div class="ab-name">Super Admin</div>
+          <div class="ab-sub">Manages all sites</div>
+        </div>
+        <div class="arch-box strapi">
+          <div class="ab-icon">🔐</div>
+          <div class="ab-name">Role-Based Access</div>
+          <div class="ab-sub">Per-site editors</div>
+        </div>
+        <div class="arch-box strapi">
+          <div class="ab-icon">🖼</div>
+          <div class="ab-name">Media Library</div>
+          <div class="ab-sub">Image management</div>
+        </div>
+      </div>
+
+      <!-- Arrow 1 -->
+      <div class="arch-arrow">
+        <div class="arch-arrow-horiz">
+          <div class="arch-arrow-line-h"></div>
+          <div class="arch-arrow-label">REST API<br>+ Webhooks</div>
+        </div>
+      </div>
+
+      <!-- Col 2: Strapi Backend -->
+      <div>
+        <div class="arch-col-title">Backend — Strapi</div>
+        <div class="arch-box green">
+          <div class="ab-icon">🗄</div>
+          <div class="ab-name">PostgreSQL</div>
+          <div class="ab-sub">Primary database</div>
+        </div>
+        <div class="arch-box green">
+          <div class="ab-icon">🔌</div>
+          <div class="ab-name">REST / GraphQL API</div>
+          <div class="ab-sub">Auto-generated</div>
+        </div>
+        <div class="arch-box green">
+          <div class="ab-icon">📡</div>
+          <div class="ab-name">Webhooks</div>
+          <div class="ab-sub">On publish/update</div>
+        </div>
+        <div class="arch-box green">
+          <div class="ab-icon">🏷</div>
+          <div class="ab-name">API Tokens</div>
+          <div class="ab-sub">Per-site read tokens</div>
+        </div>
+        <div class="arch-box green">
+          <div class="ab-icon">📦</div>
+          <div class="ab-name">Upload Provider</div>
+          <div class="ab-sub">Cloudinary / S3</div>
+        </div>
+      </div>
+
+      <!-- Arrow 2 -->
+      <div class="arch-arrow">
+        <div class="arch-arrow-horiz">
+          <div class="arch-arrow-line-h"></div>
+          <div class="arch-arrow-label">Fetch on<br>build + runtime</div>
+        </div>
+      </div>
+
+      <!-- Col 3: Astro Sites -->
+      <div>
+        <div class="arch-col-title">Frontend — Astro Sites</div>
+        <div class="arch-box astro">
+          <div class="ab-icon">🚀</div>
+          <div class="ab-name">Site A — tejados-madrid</div>
+          <div class="ab-sub">Astro + React Islands</div>
+        </div>
+        <div class="arch-box astro">
+          <div class="ab-icon">🚀</div>
+          <div class="ab-name">Site B — tejados-barca</div>
+          <div class="ab-sub">Astro + React Islands</div>
+        </div>
+        <div class="arch-box astro">
+          <div class="ab-icon">🚀</div>
+          <div class="ab-name">Site C — tejados-valencia</div>
+          <div class="ab-sub">Astro + React Islands</div>
+        </div>
+        <div class="arch-box dim">
+          <div class="ab-icon">➕</div>
+          <div class="ab-name">Site N — any domain</div>
+          <div class="ab-sub">Deploy with SITE_SLUG</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Strapi vs Supabase -->
+  <div class="card">
+    <div class="card-title">⚖️ Strapi vs Supabase for this use case</div>
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="strapi-h">Strapi ✅ (chosen)</th>
+          <th class="neutral">Supabase</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Admin UI for editors</td><td style="color:var(--green)">✅ Full built-in CMS dashboard</td><td style="color:var(--muted2)">⚠️ Must build custom UI</td></tr>
+        <tr><td>Content modeling</td><td style="color:var(--green)">✅ Visual Content Type Builder</td><td style="color:var(--muted2)">⚠️ SQL migrations</td></tr>
+        <tr><td>Media management</td><td style="color:var(--green)">✅ Built-in media library</td><td style="color:var(--muted2)">✅ Supabase Storage</td></tr>
+        <tr><td>Webhooks on publish</td><td style="color:var(--green)">✅ Native webhooks</td><td style="color:var(--muted2)">⚠️ Edge functions needed</td></tr>
+        <tr><td>Role-based access</td><td style="color:var(--green)">✅ Fine-grained RBAC</td><td style="color:var(--muted2)">✅ RLS policies</td></tr>
+        <tr><td>Realtime updates</td><td style="color:var(--amber)">⚠️ Via webhooks (rebuild)</td><td style="color:var(--green)">✅ Native websocket realtime</td></tr>
+        <tr><td>No custom backend needed</td><td style="color:var(--green)">✅ Strapi IS the backend</td><td style="color:var(--green)">✅ Serverless</td></tr>
+        <tr><td>Self-hosted</td><td style="color:var(--green)">✅ Full control</td><td style="color:var(--amber)">⚠️ Cloud-first</td></tr>
+        <tr><td>Non-dev editor friendly</td><td style="color:var(--green)">✅ Best-in-class UI</td><td style="color:var(--amber)">⚠️ Technical</td></tr>
+      </tbody>
+    </table>
+    <div style="font-family:'Space Mono',monospace; font-size:0.72rem; color:var(--muted2); line-height:1.7">
+      💡 <strong style="color:var(--text)">Verdict:</strong> Strapi wins for editor experience and content modeling. Supabase wins for realtime. Since you need editors to manage multiple sites without coding, <span style="color:var(--strapi-light)">Strapi is the better choice.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 02 CONTENT TYPES ══════════ -->
+<div id="sec-content-types" class="section">
+  <div class="sec-header">
+    <div class="sec-label">// 02 — strapi content types</div>
+    <h2 class="sec-title"><span class="accent-strapi">Content Types</span> Schema</h2>
+  </div>
+
+  <div class="ct-grid">
+
+    <div class="ct-card">
+      <div class="ct-head strapi">🌐 Site <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— all registered websites</span></div>
+      <div class="ct-row"><span class="ct-field">id</span><span class="ct-type">Auto (Strapi)</span></div>
+      <div class="ct-row"><span class="ct-field">name</span><span style="display:flex;gap:6px;align-items:center"><span class="badge req">REQ</span><span class="ct-type">String</span></span></div>
+      <div class="ct-row"><span class="ct-field">slug</span><span style="display:flex;gap:6px;align-items:center"><span class="badge req">REQ</span><span class="ct-type">UID (unique)</span></span></div>
+      <div class="ct-row"><span class="ct-field">domain</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">is_active</span><span class="ct-type">Boolean</span></div>
+      <div class="ct-row"><span class="ct-field">config</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">REL</span><span class="ct-type">→ SiteConfig</span></span></div>
+      <div class="ct-row"><span class="ct-field">seo</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">REL</span><span class="ct-type">→ SiteSeo (many)</span></span></div>
+      <div class="ct-row"><span class="ct-field">content_blocks</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">REL</span><span class="ct-type">→ ContentBlock (many)</span></span></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-head amber">⚙️ SiteConfig <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— theme & layout</span></div>
+      <div class="ct-row"><span class="ct-field">site</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Site (1:1)</span></span></div>
+      <div class="ct-row"><span class="ct-field">primary_color</span><span class="ct-type">String (#hex)</span></div>
+      <div class="ct-row"><span class="ct-field">secondary_color</span><span class="ct-type">String (#hex)</span></div>
+      <div class="ct-row"><span class="ct-field">font_heading</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">font_body</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">layout_template</span><span class="ct-type">Enum (A/B/C)</span></div>
+      <div class="ct-row"><span class="ct-field">logo</span><span class="ct-type">Media (image)</span></div>
+      <div class="ct-row"><span class="ct-field">favicon</span><span class="ct-type">Media (image)</span></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-head green">🔍 SiteSeo <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— SEO per page</span></div>
+      <div class="ct-row"><span class="ct-field">site</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Site</span></span></div>
+      <div class="ct-row"><span class="ct-field">page_slug</span><span style="display:flex;gap:6px;align-items:center"><span class="badge req">REQ</span><span class="ct-type">String ('/' '/about')</span></span></div>
+      <div class="ct-row"><span class="ct-field">meta_title</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">meta_description</span><span class="ct-type">Text</span></div>
+      <div class="ct-row"><span class="ct-field">og_image</span><span class="ct-type">Media (image)</span></div>
+      <div class="ct-row"><span class="ct-field">keywords</span><span class="ct-type">JSON (array)</span></div>
+      <div class="ct-row"><span class="ct-field">canonical_url</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">no_index</span><span class="ct-type">Boolean</span></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-head teal">📝 ContentBlock <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— editable sections</span></div>
+      <div class="ct-row"><span class="ct-field">site</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Site</span></span></div>
+      <div class="ct-row"><span class="ct-field">block_key</span><span style="display:flex;gap:6px;align-items:center"><span class="badge req">REQ</span><span class="ct-type">String (e.g. 'hero_title')</span></span></div>
+      <div class="ct-row"><span class="ct-field">block_type</span><span class="ct-type">Enum (text/image/html)</span></div>
+      <div class="ct-row"><span class="ct-field">value_text</span><span class="ct-type">RichText</span></div>
+      <div class="ct-row"><span class="ct-field">value_image</span><span class="ct-type">Media (image)</span></div>
+      <div class="ct-row"><span class="ct-field">page_slug</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">sort_order</span><span class="ct-type">Integer</span></div>
+      <div class="ct-row"><span class="ct-field">is_visible</span><span class="ct-type">Boolean</span></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-head strapi">👥 SiteEditor <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— access control</span></div>
+      <div class="ct-row"><span class="ct-field">strapi_user</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Admin User</span></span></div>
+      <div class="ct-row"><span class="ct-field">site</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Site</span></span></div>
+      <div class="ct-row"><span class="ct-field">can_edit_content</span><span class="ct-type">Boolean</span></div>
+      <div class="ct-row"><span class="ct-field">can_edit_seo</span><span class="ct-type">Boolean</span></div>
+      <div class="ct-row"><span class="ct-field">can_edit_theme</span><span class="ct-type">Boolean</span></div>
+      <div class="ct-row"><span class="ct-field">can_publish</span><span class="ct-type">Boolean</span></div>
+    </div>
+
+    <div class="ct-card">
+      <div class="ct-head astro">🪝 WebhookLog <span style="font-weight:400;opacity:0.6;font-size:0.7rem">— delivery tracking</span></div>
+      <div class="ct-row"><span class="ct-field">site</span><span style="display:flex;gap:6px;align-items:center"><span class="badge fk">FK</span><span class="ct-type">→ Site</span></span></div>
+      <div class="ct-row"><span class="ct-field">event</span><span class="ct-type">String (entry.publish)</span></div>
+      <div class="ct-row"><span class="ct-field">target_url</span><span class="ct-type">String</span></div>
+      <div class="ct-row"><span class="ct-field">status_code</span><span class="ct-type">Integer (200/500)</span></div>
+      <div class="ct-row"><span class="ct-field">payload</span><span class="ct-type">JSON</span></div>
+      <div class="ct-row"><span class="ct-field">triggered_at</span><span class="ct-type">DateTime</span></div>
+      <div class="ct-row"><span class="ct-field">retry_count</span><span class="ct-type">Integer</span></div>
+    </div>
+
+  </div>
+
+  <!-- API Permissions -->
+  <div class="card">
+    <div class="card-title">🔑 Strapi API Token Strategy — Per Site Isolation</div>
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Token / Role</th>
+          <th class="strapi-h">Scope</th>
+          <th class="neutral">Used by</th>
+          <th class="neutral">Permissions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Super Admin</td><td style="color:var(--strapi-light)">All content types, all sites</td><td>Owner only</td><td style="color:var(--green)">Full CRUD + publish + settings</td></tr>
+        <tr><td>Site Editor (Role)</td><td style="color:var(--strapi-light)">Filtered by site relation</td><td>Per-site admins</td><td style="color:var(--amber)">Edit own site content + publish</td></tr>
+        <tr><td>Read API Token — Site A</td><td style="color:var(--astro-light)">site slug = "madrid"</td><td>Astro Site A</td><td style="color:var(--green)">GET only, filter by site</td></tr>
+        <tr><td>Read API Token — Site B</td><td style="color:var(--astro-light)">site slug = "barca"</td><td>Astro Site B</td><td style="color:var(--green)">GET only, filter by site</td></tr>
+        <tr><td>Webhook Secret</td><td style="color:var(--green)">Signed request header</td><td>Vercel deploy hooks</td><td style="color:var(--amber)">Trigger rebuild only</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════ 03 FLOW ══════════ -->
+<div id="sec-flow" class="section">
+  <div class="sec-header">
+    <div class="sec-label">// 03 — update flow</div>
+    <h2 class="sec-title">Admin Edit → <span class="accent-astro">Site Updates</span></h2>
+  </div>
+
+  <!-- Flow Diagram -->
+  <div class="flow-wrap">
+    <div class="flow-label">// Full Data Flow: Strapi CMS → Webhook → Astro Rebuild</div>
+
+    <!-- Row 1: Admin side -->
+    <div class="flow-track">
+      <div class="fnode strapi">
+        <div class="fn-icon">🔐</div>
+        <div class="fn-title">Admin Login</div>
+        <div class="fn-sub">Strapi Dashboard</div>
+      </div>
+      <div class="fedge"><div class="fedge-line strapi-g"></div><div class="fedge-label">navigate</div></div>
+      <div class="fnode strapi">
+        <div class="fn-icon">📋</div>
+        <div class="fn-title">Select Site</div>
+        <div class="fn-sub">Filter by site slug</div>
+      </div>
+      <div class="fedge"><div class="fedge-line strapi-g"></div><div class="fedge-label">open entry</div></div>
+      <div class="fnode strapi">
+        <div class="fn-icon">✏️</div>
+        <div class="fn-title">Edit Content</div>
+        <div class="fn-sub">Rich editor / media</div>
+      </div>
+      <div class="fedge"><div class="fedge-line strapi-g"></div><div class="fedge-label">click publish</div></div>
+      <div class="fnode dark">
+        <div class="fn-icon">✅</div>
+        <div class="fn-title">entry.publish</div>
+        <div class="fn-sub">Strapi lifecycle</div>
+      </div>
+    </div>
+
+    <!-- Row 2: Webhook side -->
+    <div class="flow-track" style="justify-content:flex-end">
+      <div class="fnode green">
+        <div class="fn-icon">🗄</div>
+        <div class="fn-title">PostgreSQL</div>
+        <div class="fn-sub">Data persisted</div>
+      </div>
+      <div class="fedge" style="flex-direction:row-reverse"><div class="fedge-line green-g" style="transform:scaleX(-1)"></div><div class="fedge-label">triggers</div></div>
+      <div class="fnode green">
+        <div class="fn-icon">🪝</div>
+        <div class="fn-title">Webhook</div>
+        <div class="fn-sub">POST → site URL</div>
+      </div>
+      <div class="fedge" style="flex-direction:row-reverse"><div class="fedge-line green-g" style="transform:scaleX(-1)"></div><div class="fedge-label">HTTP POST</div></div>
+      <div class="fnode amber">
+        <div class="fn-icon">▲</div>
+        <div class="fn-title">Vercel Hook</div>
+        <div class="fn-sub">Deploy triggered</div>
+      </div>
+    </div>
+
+    <!-- Row 3: Astro rebuild -->
+    <div class="flow-track">
+      <div class="fnode astro">
+        <div class="fn-icon">🚀</div>
+        <div class="fn-title">Astro Build</div>
+        <div class="fn-sub">astro build</div>
+      </div>
+      <div class="fedge"><div class="fedge-line astro-g"></div><div class="fedge-label">fetch API</div></div>
+      <div class="fnode astro">
+        <div class="fn-icon">🌐</div>
+        <div class="fn-title">Strapi REST API</div>
+        <div class="fn-sub">GET /site?slug=madrid</div>
+      </div>
+      <div class="fedge"><div class="fedge-line astro-g"></div><div class="fedge-label">render pages</div></div>
+      <div class="fnode astro">
+        <div class="fn-icon">📄</div>
+        <div class="fn-title">Static HTML</div>
+        <div class="fn-sub">Generated pages</div>
+      </div>
+      <div class="fedge"><div class="fedge-line astro-g"></div><div class="fedge-label">deploy to CDN</div></div>
+      <div class="fnode green">
+        <div class="fn-icon">✨</div>
+        <div class="fn-title">Live in &lt;30s</div>
+        <div class="fn-sub">New content live</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Webhook flow detail -->
+  <div class="card">
+    <div class="card-title">📡 Webhook Delivery Detail</div>
+    <div class="webhook-flow">
+      <div class="wh-row">
+        <div class="wh-box strapi">
+          <div class="wb-icon">🛠</div>
+          <div class="wb-name">Strapi</div>
+          <div class="wb-sub">entry.publish event</div>
+        </div>
+        <div class="wh-arrow">→</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+          <div class="wh-box" style="min-width:170px">
+            <div class="wb-icon">📨</div>
+            <div class="wb-name">POST request</div>
+            <div class="wb-sub">X-Strapi-Signature: sha256</div>
+          </div>
+        </div>
+        <div class="wh-arrow">→</div>
+        <div class="wh-box astro">
+          <div class="wb-icon">▲</div>
+          <div class="wb-name">Vercel Deploy Hook</div>
+          <div class="wb-sub">Site A URL</div>
+        </div>
+        <div class="wh-arrow">→</div>
+        <div class="wh-box astro">
+          <div class="wb-icon">▲</div>
+          <div class="wb-name">Vercel Deploy Hook</div>
+          <div class="wb-sub">Site B URL</div>
+        </div>
+        <div class="wh-arrow">→</div>
+        <div class="wh-time">~20–30s rebuild</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step by step -->
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot">1</div>
+      <div class="tl-top"><span class="tl-title">Admin logs into Strapi dashboard</span><span class="tl-badge">t = 0s</span></div>
+      <p class="tl-desc">Admin navigates to the Strapi admin panel (e.g. admin.yourdomain.com). Logs in via email/password. Super admin sees all content; site editors only see entries where the site relation matches their assigned site — enforced by Strapi RBAC.</p>
+      <div class="pill-row"><span class="pill strapi">Strapi RBAC</span><span class="pill strapi">JWT session</span><span class="pill green">Role-based filter</span></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">2</div>
+      <div class="tl-top"><span class="tl-title">Navigate to ContentBlock for target site</span><span class="tl-badge">t = 3s</span></div>
+      <p class="tl-desc">Admin filters ContentBlock entries by site slug (e.g. "madrid"). Strapi's list view shows only blocks belonging to Tejados Madrid. Admin opens an entry — e.g. the hero section title.</p>
+      <div class="pill-row"><span class="pill strapi">Content Type: ContentBlock</span><span class="pill strapi">Filter: site.slug = madrid</span></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">3</div>
+      <div class="tl-top"><span class="tl-title">Edit content, upload media, change SEO</span><span class="tl-badge">t = 10–90s</span></div>
+      <p class="tl-desc">Admin edits text in the rich text editor, uploads new images to Strapi Media Library (which pushes to Cloudinary/S3), updates SEO fields in the SiteSeo entry. Theme changes (colors, fonts) are updated in SiteConfig.</p>
+      <div class="pill-row"><span class="pill strapi">Rich text editor</span><span class="pill strapi">Media Library → Cloudinary</span><span class="pill amber">SiteConfig, SiteSeo</span></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">4</div>
+      <div class="tl-top"><span class="tl-title">Click "Publish" → webhook fires</span><span class="tl-badge">t = +0.2s</span></div>
+      <p class="tl-desc">Admin clicks Publish. Strapi saves the entry to PostgreSQL, then fires all registered webhooks for the entry.publish event. The payload includes the content type, entry ID, and site relation data. Strapi signs the request with a shared secret.</p>
+      <div class="pill-row"><span class="pill strapi">entry.publish lifecycle</span><span class="pill green">Webhook → signed POST</span><span class="pill amber">PostgreSQL persisted</span></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">5</div>
+      <div class="tl-top"><span class="tl-title">Vercel Deploy Hook triggers Astro rebuild</span><span class="tl-badge">t = +2s</span></div>
+      <p class="tl-desc">A lightweight Vercel Serverless Function receives the webhook, verifies the signature, determines which site(s) to rebuild based on the payload's site slug, and calls the corresponding Vercel Deploy Hook URL(s). Only the affected site rebuilds — not all sites.</p>
+      <div class="pill-row"><span class="pill amber">Webhook receiver function</span><span class="pill amber">Signature verify</span><span class="pill astro">Selective rebuild</span></div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">6</div>
+      <div class="tl-top"><span class="tl-title">Astro builds → fetches Strapi API → deploys</span><span class="tl-badge">t = +15–30s</span></div>
+      <p class="tl-desc">Vercel runs <code style="color:var(--astro)">astro build</code> for the target site. During build, Astro fetches all content from Strapi REST API using the site's read-only API token. Pages are generated as optimized static HTML. Vercel deploys to CDN — visitors see the new content.</p>
+      <div class="pill-row"><span class="pill astro">astro build</span><span class="pill astro">GET /api/content-blocks?site.slug=madrid</span><span class="pill green">Static HTML → CDN ✅</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 04 CODE ══════════ -->
+<div id="sec-code" class="section">
+  <div class="sec-header">
+    <div class="sec-label">// 04 — code reference</div>
+    <h2 class="sec-title">Key <span class="accent-astro">Code</span> Snippets</h2>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🚀 Astro — Fetch from Strapi at Build Time</div>
+    <div class="code-block">
+<span class="cc">// src/lib/strapi.js — Strapi API client</span>
+<span class="ck">const</span> <span class="cv">STRAPI_URL</span>   = <span class="cf">import</span>.<span class="cp">meta</span>.<span class="cp">env</span>.<span class="cv">STRAPI_URL</span>   <span class="cc">// e.g. https://cms.yourdomain.com</span>
+<span class="ck">const</span> <span class="cv">STRAPI_TOKEN</span> = <span class="cf">import</span>.<span class="cp">meta</span>.<span class="cp">env</span>.<span class="cv">STRAPI_API_TOKEN</span> <span class="cc">// read-only token for this site</span>
+<span class="ck">const</span> <span class="cv">SITE_SLUG</span>    = <span class="cf">import</span>.<span class="cp">meta</span>.<span class="cp">env</span>.<span class="cv">PUBLIC_SITE_SLUG</span>   <span class="cc">// e.g. "madrid"</span>
+
+<span class="ck">async function</span> <span class="cf">strapiGet</span>(<span class="cv">path</span>) {
+  <span class="ck">const</span> <span class="cv">res</span> = <span class="ck">await</span> <span class="cf">fetch</span>(<span class="cs">`${STRAPI_URL}/api/${path}`</span>, {
+    headers: { <span class="cs">'Authorization'</span>: <span class="cs">`Bearer ${STRAPI_TOKEN}`</span> }
+  })
+  <span class="ck">return</span> (<span class="ck">await</span> <span class="cv">res</span>.<span class="cf">json</span>()).<span class="cp">data</span>
+}
+
+<span class="cc">// Fetch everything for this site in one go</span>
+<span class="ck">export async function</span> <span class="cf">getSiteData</span>() {
+  <span class="ck">const</span> [<span class="cv">config</span>, <span class="cv">seo</span>, <span class="cv">blocks</span>] = <span class="ck">await</span> <span class="cf">Promise.all</span>([
+    <span class="cf">strapiGet</span>(<span class="cs">`site-configs?filters[site][slug][$eq]=${SITE_SLUG}&populate=logo`</span>),
+    <span class="cf">strapiGet</span>(<span class="cs">`site-seos?filters[site][slug][$eq]=${SITE_SLUG}`</span>),
+    <span class="cf">strapiGet</span>(<span class="cs">`content-blocks?filters[site][slug][$eq]=${SITE_SLUG}&sort=sort_order&populate=value_image`</span>),
+  ])
+  <span class="ck">return</span> { <span class="cv">config</span>: <span class="cv">config</span>[<span class="cn">0</span>], <span class="cv">seo</span>, <span class="cv">blocks</span> }
+}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🌐 Astro — Page with Strapi Data</div>
+    <div class="code-block">
+<span class="cc">// src/pages/index.astro</span>
+<span class="cc">---</span>
+<span class="ck">import</span> { <span class="cv">getSiteData</span> } <span class="ck">from</span> <span class="cs">'../lib/strapi.js'</span>
+<span class="ck">import</span> <span class="cv">Base</span> <span class="ck">from</span> <span class="cs">'../layouts/Base.astro'</span>
+<span class="ck">import</span> <span class="cv">Hero</span> <span class="ck">from</span> <span class="cs">'../components/Hero.jsx'</span>
+
+<span class="cc">// Runs at BUILD TIME — fetches from Strapi</span>
+<span class="ck">const</span> { <span class="cv">config</span>, <span class="cv">seo</span>, <span class="cv">blocks</span> } = <span class="ck">await</span> <span class="cf">getSiteData</span>()
+
+<span class="ck">const</span> <span class="cv">homeSeo</span>    = <span class="cv">seo</span>.<span class="cf">find</span>(<span class="cv">s</span> => <span class="cv">s</span>.<span class="cp">page_slug</span> === <span class="cs">'/'</span>)
+<span class="ck">const</span> <span class="cv">heroBlocks</span> = <span class="cv">blocks</span>.<span class="cf">filter</span>(<span class="cv">b</span> => <span class="cv">b</span>.<span class="cp">page_slug</span> === <span class="cs">'/'</span> && <span class="cv">b</span>.<span class="cp">is_visible</span>)
+<span class="cc">---</span>
+
+&lt;<span class="cf">Base</span> <span class="cp">config</span>={<span class="cv">config</span>} <span class="cp">seo</span>={<span class="cv">homeSeo</span>}&gt;
+  &lt;<span class="cf">Hero</span>
+    <span class="cp">title</span>={<span class="cv">heroBlocks</span>.<span class="cf">find</span>(<span class="cv">b</span> => <span class="cv">b</span>.<span class="cp">block_key</span> === <span class="cs">'hero_title'</span>)?.<span class="cp">value_text</span>}
+    <span class="cp">image</span>={<span class="cv">heroBlocks</span>.<span class="cf">find</span>(<span class="cv">b</span> => <span class="cv">b</span>.<span class="cp">block_key</span> === <span class="cs">'hero_image'</span>)?.<span class="cp">value_image</span>}
+    <span class="cp">primaryColor</span>={<span class="cv">config</span>.<span class="cp">primary_color</span>}
+  /&gt;
+&lt;/<span class="cf">Base</span>&gt;
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🪝 Webhook Receiver — Vercel Serverless Function</div>
+    <div class="code-block">
+<span class="cc">// api/strapi-webhook.js — Vercel serverless function</span>
+<span class="ck">import</span> { <span class="cv">createHmac</span> } <span class="ck">from</span> <span class="cs">'crypto'</span>
+
+<span class="cc">// Map site slugs → Vercel deploy hook URLs</span>
+<span class="ck">const</span> <span class="cv">DEPLOY_HOOKS</span> = {
+  <span class="cs">'madrid'</span>:   <span class="cv">process</span>.<span class="cp">env</span>.<span class="cv">VERCEL_HOOK_MADRID</span>,
+  <span class="cs">'barca'</span>:    <span class="cv">process</span>.<span class="cp">env</span>.<span class="cv">VERCEL_HOOK_BARCA</span>,
+  <span class="cs">'valencia'</span>: <span class="cv">process</span>.<span class="cp">env</span>.<span class="cv">VERCEL_HOOK_VALENCIA</span>,
+}
+
+<span class="ck">export default async function</span> <span class="cf">handler</span>(<span class="cv">req</span>, <span class="cv">res</span>) {
+  <span class="cc">// 1. Verify Strapi signature</span>
+  <span class="ck">const</span> <span class="cv">sig</span>  = <span class="cv">req</span>.<span class="cp">headers</span>[<span class="cs">'x-strapi-signature'</span>]
+  <span class="ck">const</span> <span class="cv">body</span> = <span class="cn">JSON</span>.<span class="cf">stringify</span>(<span class="cv">req</span>.<span class="cp">body</span>)
+  <span class="ck">const</span> <span class="cv">hash</span> = <span class="cf">createHmac</span>(<span class="cs">'sha256'</span>, <span class="cv">process</span>.<span class="cp">env</span>.<span class="cv">WEBHOOK_SECRET</span>).<span class="cf">update</span>(<span class="cv">body</span>).<span class="cf">digest</span>(<span class="cs">'hex'</span>)
+  <span class="ck">if</span> (<span class="cv">hash</span> !== <span class="cv">sig</span>) <span class="ck">return</span> <span class="cv">res</span>.<span class="cf">status</span>(<span class="cn">401</span>).<span class="cf">end</span>()
+
+  <span class="cc">// 2. Determine which site(s) to rebuild</span>
+  <span class="ck">const</span> <span class="cv">siteSlug</span> = <span class="cv">req</span>.<span class="cp">body</span>?.<span class="cp">entry</span>?.<span class="cp">site</span>?.<span class="cp">slug</span>
+  <span class="ck">const</span> <span class="cv">hookUrl</span>  = <span class="cv">DEPLOY_HOOKS</span>[<span class="cv">siteSlug</span>]
+
+  <span class="ck">if</span> (!<span class="cv">hookUrl</span>) <span class="ck">return</span> <span class="cv">res</span>.<span class="cf">status</span>(<span class="cn">200</span>).<span class="cf">json</span>({ <span class="cp">skipped</span>: <span class="ck">true</span> })
+
+  <span class="cc">// 3. Trigger rebuild only for the affected site</span>
+  <span class="ck">await</span> <span class="cf">fetch</span>(<span class="cv">hookUrl</span>, { method: <span class="cs">'POST'</span> })
+
+  <span class="cv">res</span>.<span class="cf">json</span>({ <span class="cp">rebuilt</span>: <span class="cv">siteSlug</span>, <span class="cp">timestamp</span>: <span class="ck">new</span> <span class="cf">Date</span>().<span class="cf">toISOString</span>() })
+}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚙️ Astro — .env per Site Deployment</div>
+    <div class="code-block">
+<span class="cc"># Site A — tejados-madrid.com</span>
+<span class="cp">STRAPI_URL</span>=https://cms.yourdomain.com
+<span class="cp">STRAPI_API_TOKEN</span>=abc123-madrid-readonly-token
+<span class="cp">PUBLIC_SITE_SLUG</span>=madrid
+
+<span class="cc"># Site B — tejados-barca.com (same codebase, different env)</span>
+<span class="cp">STRAPI_URL</span>=https://cms.yourdomain.com
+<span class="cp">STRAPI_API_TOKEN</span>=def456-barca-readonly-token
+<span class="cp">PUBLIC_SITE_SLUG</span>=barca
+
+<span class="cc"># Strapi self-hosted on Railway</span>
+<span class="cp">DATABASE_URL</span>=postgresql://user:pass@railway.app:5432/strapi
+<span class="cp">APP_KEYS</span>=key1,key2,key3,key4
+<span class="cp">ADMIN_JWT_SECRET</span>=your-secret
+<span class="cp">WEBHOOK_SECRET</span>=your-webhook-secret
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 05 CHARTS ══════════ -->
+<div id="sec-charts" class="section">
+  <div class="sec-header">
+    <div class="sec-label">// 05 — charts & comparisons</div>
+    <h2 class="sec-title">Visual <span class="accent-strapi">Analytics</span></h2>
+  </div>
+
+  <div class="charts-grid">
+
+    <div class="chart-card">
+      <div class="chart-label">// Strapi vs Firebase vs Supabase — Feature Radar</div>
+      <canvas id="radarChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">// Update Pipeline Latency Breakdown (seconds)</div>
+      <canvas id="latencyChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">// Admin-Editable Feature Distribution</div>
+      <canvas id="donutChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">// Scalability: Managing N Sites Over Time</div>
+      <canvas id="scaleChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">// Content Type Usage Estimate per Site</div>
+      <canvas id="barChart"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-label">// Strapi vs Custom Backend — Dev Effort (hrs)</div>
+      <canvas id="effortChart"></canvas>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ 06 DEPLOY ══════════ -->
+<div id="sec-deploy" class="section">
+  <div class="sec-header">
+    <div class="sec-label">// 06 — deployment & structure</div>
+    <h2 class="sec-title">Deploy <span class="accent-strapi">Strategy</span></h2>
+  </div>
+
+  <!-- Deploy cards -->
+  <div class="deploy-grid">
+
+    <div class="deploy-card">
+      <div class="deploy-icon">🚂</div>
+      <div class="deploy-name">Strapi CMS</div>
+      <div class="deploy-sub">cms.yourdomain.com</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Railway / Render</span>
+        <span class="deploy-tag">Node.js 20</span>
+        <span class="deploy-tag">PostgreSQL addon</span>
+        <span class="deploy-tag">512MB RAM min</span>
+        <span class="deploy-tag">Persistent disk</span>
+      </div>
+    </div>
+
+    <div class="deploy-card">
+      <div class="deploy-icon">▲</div>
+      <div class="deploy-name">Admin Panel</div>
+      <div class="deploy-sub">admin.yourdomain.com</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Strapi built-in</span>
+        <span class="deploy-tag">Same Railway app</span>
+        <span class="deploy-tag">RBAC roles</span>
+      </div>
+    </div>
+
+    <div class="deploy-card">
+      <div class="deploy-icon">🚀</div>
+      <div class="deploy-name">Site A — Madrid</div>
+      <div class="deploy-sub">tejados-madrid.com</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Vercel — site-madrid</span>
+        <span class="deploy-tag">SITE_SLUG=madrid</span>
+        <span class="deploy-tag">Deploy Hook: Madrid</span>
+        <span class="deploy-tag">Static output</span>
+      </div>
+    </div>
+
+    <div class="deploy-card">
+      <div class="deploy-icon">🚀</div>
+      <div class="deploy-name">Site B — Barcelona</div>
+      <div class="deploy-sub">tejados-barca.com</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Vercel — site-barca</span>
+        <span class="deploy-tag">SITE_SLUG=barca</span>
+        <span class="deploy-tag">Deploy Hook: Barca</span>
+        <span class="deploy-tag">Static output</span>
+      </div>
+    </div>
+
+    <div class="deploy-card">
+      <div class="deploy-icon">🪝</div>
+      <div class="deploy-name">Webhook Receiver</div>
+      <div class="deploy-sub">hooks.yourdomain.com</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Vercel Serverless</span>
+        <span class="deploy-tag">Signature verify</span>
+        <span class="deploy-tag">Selective rebuild</span>
+      </div>
+    </div>
+
+    <div class="deploy-card">
+      <div class="deploy-icon">☁️</div>
+      <div class="deploy-name">Media Storage</div>
+      <div class="deploy-sub">CDN delivered</div>
+      <div class="deploy-tags">
+        <span class="deploy-tag">Cloudinary (free tier)</span>
+        <span class="deploy-tag">Or AWS S3</span>
+        <span class="deploy-tag">Strapi Upload Plugin</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Folder Structure -->
+  <div class="card">
+    <div class="card-title">📁 Project Folder Structure</div>
+    <div class="tree">
+<span class="t-dir">📁 project-root/</span>
+├── <span class="t-dir">strapi-cms/</span>                     <span class="t-cm"># Strapi v5 — self-hosted CMS</span>
+│   ├── <span class="t-dir">src/</span>
+│   │   ├── <span class="t-dir">api/</span>
+│   │   │   ├── <span class="t-s">site/</span>                   <span class="t-cm"># Content Type: Site</span>
+│   │   │   ├── <span class="t-s">site-config/</span>            <span class="t-cm"># Content Type: SiteConfig</span>
+│   │   │   ├── <span class="t-s">site-seo/</span>               <span class="t-cm"># Content Type: SiteSeo</span>
+│   │   │   ├── <span class="t-s">content-block/</span>          <span class="t-cm"># Content Type: ContentBlock</span>
+│   │   │   └── <span class="t-s">site-editor/</span>            <span class="t-cm"># Content Type: SiteEditor</span>
+│   │   ├── <span class="t-dir">extensions/</span>              <span class="t-cm"># Custom logic</span>
+│   │   └── <span class="t-dir">middlewares/</span>
+│   ├── <span class="t-dir">config/</span>
+│   │   ├── <span class="t-file">database.js</span>             <span class="t-cm"># PostgreSQL config</span>
+│   │   ├── <span class="t-file">server.js</span>
+│   │   └── <span class="t-file">plugins.js</span>              <span class="t-cm"># upload plugin (Cloudinary)</span>
+│   ├── <span class="t-env">.env</span>                        <span class="t-cm"># DATABASE_URL, APP_KEYS, ADMIN_JWT</span>
+│   └── <span class="t-file">package.json</span>
+│
+├── <span class="t-dir">astro-template/</span>                 <span class="t-cm"># One codebase → infinite sites</span>
+│   ├── <span class="t-dir">src/</span>
+│   │   ├── <span class="t-dir">components/</span>
+│   │   │   ├── <span class="t-a">Hero.jsx</span>              <span class="t-cm"># React Island</span>
+│   │   │   ├── <span class="t-a">Services.jsx</span>          <span class="t-cm"># React Island</span>
+│   │   │   ├── <span class="t-a">Gallery.jsx</span>           <span class="t-cm"># React Island</span>
+│   │   │   └── <span class="t-file">Footer.astro</span>
+│   │   ├── <span class="t-dir">layouts/</span>
+│   │   │   ├── <span class="t-file">Base.astro</span>            <span class="t-cm"># dynamic &lt;head&gt; SEO + theme CSS vars</span>
+│   │   │   ├── <span class="t-file">LayoutA.astro</span>
+│   │   │   └── <span class="t-file">LayoutB.astro</span>
+│   │   ├── <span class="t-dir">pages/</span>
+│   │   │   ├── <span class="t-file">index.astro</span>           <span class="t-cm"># fetches Strapi at build time</span>
+│   │   │   └── <span class="t-file">about.astro</span>
+│   │   └── <span class="t-dir">lib/</span>
+│   │       ├── <span class="t-a">strapi.js</span>             <span class="t-cm"># API client</span>
+│   │       └── <span class="t-a">theme.js</span>              <span class="t-cm"># CSS variable injection</span>
+│   ├── <span class="t-env">.env</span>                        <span class="t-cm"># STRAPI_URL, STRAPI_API_TOKEN, PUBLIC_SITE_SLUG</span>
+│   └── <span class="t-file">astro.config.mjs</span>
+│
+└── <span class="t-dir">webhook-receiver/</span>               <span class="t-cm"># Vercel serverless — routes rebuilds</span>
+    ├── <span class="t-a">api/strapi-webhook.js</span>       <span class="t-cm"># POST /api/strapi-webhook</span>
+    ├── <span class="t-env">.env</span>                        <span class="t-cm"># WEBHOOK_SECRET, VERCEL_HOOK_*</span>
+    └── <span class="t-file">package.json</span>
+    </div>
+  </div>
+
+  <!-- Deployment Table -->
+  <div class="card">
+    <div class="card-title">📊 Full Deployment Map</div>
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th class="strapi-h">Platform</th>
+          <th class="neutral">Env Var: SITE_SLUG</th>
+          <th class="neutral">Domain</th>
+          <th class="neutral">Rebuild Trigger</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Strapi CMS + Admin</td><td style="color:var(--strapi-light)">Railway (Node.js)</td><td>— (manages all)</td><td>cms.yourdomain.com</td><td>Manual redeploy</td></tr>
+        <tr><td>Webhook Receiver</td><td style="color:var(--amber)">Vercel Serverless</td><td>— (router)</td><td>hooks.yourdomain.com</td><td>Always on</td></tr>
+        <tr><td>Site A — Madrid</td><td style="color:var(--astro)">Vercel Static</td><td>madrid</td><td>tejados-madrid.com</td><td>Strapi webhook</td></tr>
+        <tr><td>Site B — Barcelona</td><td style="color:var(--astro)">Vercel Static</td><td>barca</td><td>tejados-barca.com</td><td>Strapi webhook</td></tr>
+        <tr><td>Site C — Valencia</td><td style="color:var(--astro)">Vercel Static</td><td>valencia</td><td>tejados-valencia.com</td><td>Strapi webhook</td></tr>
+        <tr><td>Site N — new</td><td style="color:var(--astro)">Vercel Static</td><td>new-slug</td><td>any-domain.com</td><td>Strapi webhook</td></tr>
+      </tbody>
+    </table>
+    <div style="font-family:'Space Mono',monospace; font-size:0.7rem; color:var(--muted2); margin-top:12px; line-height:1.8">
+      💡 Adding a new site = (1) create Site entry in Strapi, (2) fork astro-template repo, (3) set env vars, (4) deploy to Vercel, (5) register Vercel deploy hook URL in webhook-receiver's env. <span style="color:var(--green)">Zero code changes needed.</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── NAV ──
+function show(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+  document.getElementById('sec-' + name).classList.add('active')
+  event.target.classList.add('active')
+  if (name === 'charts') setTimeout(initCharts, 80)
+  window.scrollTo({ top: document.querySelector('.nav-bar').offsetTop - 1, behavior: 'smooth' })
+}
+
+// ── CHARTS ──
+let chartsReady = false
+
+function initCharts() {
+  if (chartsReady) return
+  chartsReady = true
+
+  const STRAPI = '#7b79ff'
+  const ASTRO  = '#ff5d01'
+  const GREEN  = '#22c55e'
+  const AMBER  = '#f59e0b'
+  const TEAL   = '#14b8a6'
+  const MUTED  = '#5a5a7a'
+
+  Chart.defaults.color = '#8888aa'
+  Chart.defaults.font.family = "'Space Mono', monospace"
+  Chart.defaults.font.size = 11
+
+  const gridColor = 'rgba(255,255,255,0.04)'
+  const tickColor = '#5a5a7a'
+
+  // 1. RADAR — Strapi vs Firebase vs Supabase
+  new Chart(document.getElementById('radarChart'), {
+    type: 'radar',
+    data: {
+      labels: ['Editor UI', 'Content Modeling', 'Webhooks', 'RBAC', 'Self-hosted', 'Media Mgmt', 'No Custom Backend'],
+      datasets: [
+        {
+          label: 'Strapi',
+          data: [98, 97, 95, 92, 98, 90, 95],
+          borderColor: STRAPI,
+          backgroundColor: 'rgba(123,121,255,0.12)',
+          pointBackgroundColor: STRAPI,
+          borderWidth: 2, pointRadius: 4
+        },
+        {
+          label: 'Supabase',
+          data: [30, 55, 60, 85, 70, 80, 90],
+          borderColor: GREEN,
+          backgroundColor: 'rgba(34,197,94,0.08)',
+          pointBackgroundColor: GREEN,
+          borderWidth: 2, pointRadius: 4
+        },
+        {
+          label: 'Firebase',
+          data: [40, 50, 85, 70, 20, 78, 90],
+          borderColor: AMBER,
+          backgroundColor: 'rgba(245,158,11,0.07)',
+          pointBackgroundColor: AMBER,
+          borderWidth: 2, pointRadius: 4
+        }
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 14 } } },
+      scales: {
+        r: {
+          beginAtZero: true, max: 100,
+          ticks: { display: false, stepSize: 20 },
+          grid: { color: gridColor },
+          angleLines: { color: gridColor },
+          pointLabels: { font: { size: 10 }, color: '#8888aa' }
+        }
+      }
+    }
+  })
+
+  // 2. Latency — horizontal bar
+  new Chart(document.getElementById('latencyChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Admin clicks Publish', 'Strapi saves to DB', 'Webhook fires', 'Vercel receives', 'astro build runs', 'Deployed to CDN'],
+      datasets: [{
+        label: 'Duration (s)',
+        data: [0.1, 0.3, 0.5, 0.5, 18, 5],
+        backgroundColor: [STRAPI, STRAPI, GREEN, AMBER, ASTRO, TEAL],
+        borderRadius: 6,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { color: tickColor, callback: v => v + 's' }
+        },
+        y: { grid: { display: false }, ticks: { color: tickColor } }
+      }
+    }
+  })
+
+  // 3. Donut
+  new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Content & Text', 'Images & Media', 'SEO & Meta', 'Theme & Colors', 'Layout'],
+      datasets: [{
+        data: [35, 28, 20, 12, 5],
+        backgroundColor: [STRAPI, ASTRO, GREEN, AMBER, TEAL],
+        borderColor: '#09090f',
+        borderWidth: 4,
+        hoverOffset: 10
+      }]
+    },
+    options: {
+      cutout: '65%',
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 14 } } }
+    }
+  })
+
+  // 4. Scalability
+  const sites = [1, 2, 3, 5, 10, 20, 50]
+  new Chart(document.getElementById('scaleChart'), {
+    type: 'line',
+    data: {
+      labels: sites,
+      datasets: [
+        {
+          label: 'Strapi + Astro template (hrs to manage)',
+          data: [2, 2.2, 2.4, 2.8, 3.5, 4.5, 6],
+          borderColor: STRAPI,
+          backgroundColor: 'rgba(123,121,255,0.08)',
+          fill: true, tension: 0.4, pointRadius: 4,
+          pointBackgroundColor: STRAPI
+        },
+        {
+          label: 'Traditional per-site dev (hrs to manage)',
+          data: [2, 4, 6, 10, 20, 40, 100],
+          borderColor: ASTRO,
+          backgroundColor: 'rgba(255,93,1,0.06)',
+          fill: true, tension: 0.2, pointRadius: 4,
+          pointBackgroundColor: ASTRO
+        }
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 12 } } },
+      scales: {
+        x: {
+          title: { display: true, text: 'Number of Sites', color: tickColor },
+          grid: { display: false }, ticks: { color: tickColor }
+        },
+        y: {
+          title: { display: true, text: 'Hours to manage', color: tickColor },
+          beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor }
+        }
+      }
+    }
+  })
+
+  // 5. Content type usage bar
+  new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Site', 'SiteConfig', 'SiteSeo', 'ContentBlock', 'SiteEditor', 'WebhookLog'],
+      datasets: [
+        {
+          label: 'Rows per site (avg)',
+          data: [1, 1, 6, 25, 2, 50],
+          backgroundColor: STRAPI,
+          borderRadius: 6,
+          borderSkipped: false
+        },
+        {
+          label: 'API calls / day',
+          data: [0, 5, 5, 30, 1, 0],
+          backgroundColor: 'rgba(255,93,1,0.7)',
+          borderRadius: 6,
+          borderSkipped: false
+        }
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 12 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: tickColor } },
+        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } }
+      }
+    }
+  })
+
+  // 6. Dev effort comparison
+  new Chart(document.getElementById('effortChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Admin UI', 'Content Types', 'Auth + RBAC', 'Media Upload', 'REST API', 'Webhook System'],
+      datasets: [
+        {
+          label: 'Strapi (hrs)',
+          data: [0, 1, 1, 0.5, 0, 1],
+          backgroundColor: STRAPI,
+          borderRadius: 6,
+          borderSkipped: false
+        },
+        {
+          label: 'Custom backend (hrs)',
+          data: [40, 8, 12, 6, 10, 8],
+          backgroundColor: 'rgba(239,68,68,0.7)',
+          borderRadius: 6,
+          borderSkipped: false
+        }
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'bottom', labels: { color: tickColor, padding: 12 } } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: tickColor } },
+        y: {
+          beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor },
+          title: { display: true, text: 'Development Hours', color: tickColor }
+        }
+      }
+    }
+  })
+}
+</script>
+
+</body>
+</html>
